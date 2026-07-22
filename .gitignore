@@ -4,3 +4,5 @@ desktop.ini
 .env
 *.key
 credentials.*
+
+.claude/settings.local.json
