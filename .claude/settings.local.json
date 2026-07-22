@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -a \"C:/Users/chang/我的雲端硬碟/agents/chezmoi-setup\" 2>/dev/null; echo \"--- chezmoi ---\"; which chezmoi 2>/dev/null || echo \"chezmoi NOT installed\"; echo \"--- home dirs ---\"; ls -d \"C:/Users/chang/.claude\" \"C:/Users/chang/.codex\" \"C:/Users/chang/.config\" \"C:/Users/chang/.antigravity\" \"C:/Users/chang/.opencode\" \"C:/Users/chang/.local/share/opencode\" 2>/dev/null)",
+      "Bash(ls \"C:/Users/chang/AppData/Roaming\" 2>/dev/null | head -50; echo \"=== LOCAL ===\"; ls \"C:/Users/chang/AppData/Local\" 2>/dev/null | head -60)"
+    ]
+  }
+}
