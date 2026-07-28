@@ -20,7 +20,7 @@
 - [ ] ~~第一台電腦完成 chezmoi 初始化與四個 Agent 技能目錄納管（2026-07-22 曾完成）~~ → **已移除，需依〈從零重建〉重做**
 - [x] 撰寫 README 與 `bootstrap-new-machine.ps1`（腳本的預設 repo 網址已失效，待新 repo 建好後更新）
 - [x] 撰寫 `chezmoi-sync` 技能（口令「chezmoi 同步」，2026-07-28；尚未納入同步機制）
-- [ ] 決定是否重建 chezmoi 同步架構
+- [ ] **決定方向**（2026-07-29 待決）：重建 chezmoi ／ 改用 GDrive `check-sync.ps1` 那套涵蓋所有技能 ／ 先不動
 - [ ] 第一台電腦走〈從零重建〉：建立來源 repo 並推上 GitHub
 - [ ] 第二台電腦跑 bootstrap 完成設定
 - [ ] 第三台電腦跑 bootstrap 完成設定
