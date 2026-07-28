@@ -30,8 +30,10 @@
 
 ```
 chezmoi-setup/
-├── README.md                    # 主文件：核心概念、納管範圍、新機器設定、日常流程、已知的坑、自動化評估
-├── bootstrap-new-machine.ps1    # 第二/三台用的一鍵腳本（裝 chezmoi → init → diff → 等確認 → apply）
+├── README.md                    # 主文件：現況、核心概念、納管範圍、從零重建、新機器設定、日常流程、已知的坑、自動化評估
+├── bootstrap-new-machine.ps1    # 第二/三台用的一鍵腳本（裝 chezmoi → init → diff → 等確認 → apply）※ 預設 repo 網址已失效
+├── chezmoi-sync/                # 「chezmoi 同步」技能原始檔（未安裝、未納入同步機制）
+│   └── SKILL.md
 ├── agents.md                    # 本檔，專案藍圖
 ├── handoff.md                   # 交接檔，每次收工更新
 └── .claude/
