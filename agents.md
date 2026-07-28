@@ -14,8 +14,14 @@
 
 ## 目標與路線圖
 
-- [x] 第一台電腦完成 chezmoi 初始化與四個 Agent 技能目錄納管（2026-07-22）
-- [x] 撰寫 README 與 `bootstrap-new-machine.ps1`
+> ⚠️ **2026-07-28 現況歸零**：第一台的 chezmoi 設定已移除、遠端 repo 已刪除，三台皆未安裝 chezmoi。
+> 下列進度已依現況重新校準，詳見 [README.md](README.md) 開頭的現況區塊與〈從零重建〉。
+
+- [ ] ~~第一台電腦完成 chezmoi 初始化與四個 Agent 技能目錄納管（2026-07-22 曾完成）~~ → **已移除，需依〈從零重建〉重做**
+- [x] 撰寫 README 與 `bootstrap-new-machine.ps1`（腳本的預設 repo 網址已失效，待新 repo 建好後更新）
+- [x] 撰寫 `chezmoi-sync` 技能（口令「chezmoi 同步」，2026-07-28；尚未納入同步機制）
+- [ ] 決定是否重建 chezmoi 同步架構
+- [ ] 第一台電腦走〈從零重建〉：建立來源 repo 並推上 GitHub
 - [ ] 第二台電腦跑 bootstrap 完成設定
 - [ ] 第三台電腦跑 bootstrap 完成設定
 - [ ] 決定是否啟用自動化同步（autoCommit/autoPush、對話觸發 skill、工作排程器）— 2026-07-22 暫緩

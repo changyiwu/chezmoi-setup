@@ -2,9 +2,23 @@
 
 三台 Windows 電腦之間，同步 Claude Code / Codex / OpenCode / Antigravity 的**全域技能目錄**。
 
-- **來源 repo**：https://github.com/changyiwu/dotfiles-agent-skills （private，預設分支 `master`）
-- **本機來源目錄**：`~/.local/share/chezmoi`
-- **第一台已完成**（2026-07-22），另外兩台照〈新機器設定〉做即可。
+> ## ⚠️ 現況：尚未建置（2026-07-28 更正）
+>
+> 這份文件描述的架構**目前沒有在運作**：
+>
+> - **三台電腦都沒有安裝 chezmoi**，`~/.local/share/chezmoi` 不存在（先前裝過的已移除）
+> - **遠端 repo `changyiwu/dotfiles-agent-skills` 已刪除** —— 2026-07-28 以 `gh repo view` 確認查無此 repo（以 `changyiwu` 身分登入，不是權限問題）
+>
+> 也就是說，**沒有任何一份被 chezmoi 納管的設定還存在**。各台家目錄裡的技能檔案本身沒事，
+> 但它們現在只是普通檔案，彼此之間沒有任何同步關係。
+>
+> 連帶失去的還有來源 repo 根目錄的 **`.chezmoiignore` 與 `.gitattributes`** —— 排除憑證檔的規則
+> 和關掉 CRLF 轉換的設定都要重寫，重建時不能漏（見〈從零重建〉）。
+>
+> 要重新啟用，**不能**走〈新機器設定〉（那條路的前提是遠端 repo 已存在），要先走〈從零重建〉。
+> 其餘章節的**觀念與指令仍然有效**，只是現在還沒有東西可以套用。
+
+- **本機來源目錄（重建後）**：`~/.local/share/chezmoi`
 
 ---
 
@@ -56,11 +70,15 @@ chezmoi 的整個模型就是**兩個地方 + 兩個方向**。搞懂這張圖�
 | Agent | 全域技能路徑 | chezmoi 來源路徑 |
 |---|---|---|
 | Claude Code | `~/.claude/skills/` | `dot_claude/skills/` |
-| Codex | `~/.codex/skills/` | `dot_codex/skills/` |
+| Codex | `~/.agents/skills/` | `dot_agents/skills/` |
 | OpenCode | `~/.config/opencode/skills/` | `dot_config/opencode/skills/` |
 | Antigravity | `~/.gemini/config/skills/` | `dot_gemini/config/skills/` |
 
 `dot_` 是 chezmoi 對開頭 `.` 的編碼，不是打錯字。
+
+> **2026-07-28 更正**：Codex 那格原本寫 `~/.codex/skills/`，是錯的。Codex 的使用者技能一律放在
+> **`~/.agents/skills/`**；`~/.codex/skills/` 底下只有 Codex 隨附的 `.system/`（不納管）。
+> 重建時別再照舊版抄。
 
 ### 刻意不納管
 
@@ -74,7 +92,60 @@ chezmoi 的整個模型就是**兩個地方 + 兩個方向**。搞懂這張圖�
 
 ---
 
+## 從零重建（2026-07-28 現況該走的路）
+
+遠端 repo 已刪除，所以現在**沒有可以 `init` 的來源**。要重新啟用，得先挑一台當「第一台」，
+把它家目錄的技能收成新的來源 repo，推上 GitHub，另外兩台才有東西可拉。
+
+> ⚠️ 下面的步驟是**依本文件其餘章節的觀念推導出來的，尚未實際跑過驗證**（2026-07-28 三台都沒裝
+> chezmoi，無法當場測）。第一次做的時候逐步確認，跑完把實際遇到的差異回填進這一節。
+
+**第 0 步：先決定哪一台的技能是「正確版本」。** 這一步比任何指令都重要 —— 之後另外兩台
+`chezmoi apply` 會被這一台的內容覆蓋。三台的技能目錄若已經各自長歪，先人工比對決定要留哪些。
+
+```powershell
+# 1. 安裝，然後重開 PowerShell（PATH 才會生效，見〈已知的坑 4〉）
+winget install --id twpayne.chezmoi
+
+# 2. 建立空的來源目錄（不帶 URL = 從零開始，會順便 git init）
+chezmoi init
+
+# 3. 把四個技能目錄收進來源
+chezmoi add --recursive ~/.claude/skills
+chezmoi add --recursive ~/.agents/skills
+chezmoi add --recursive ~/.config/opencode/skills
+chezmoi add --recursive ~/.gemini/config/skills
+
+# 4. 清掉這次 add 帶進來的 Windows 唯讀屬性（見〈已知的坑 2〉，一定要做）
+Get-ChildItem "$HOME\.local\share\chezmoi" -Recurse -Force -Directory |
+  Where-Object { $_.Name -match '^(readonly_|private_)' }
+# 有列出東西就對各該路徑跑 chezmoi chattr noreadonly <路徑>
+```
+
+**第 5 步：重寫兩個被刪掉的設定檔**（舊 repo 沒了，這兩個要從頭寫）。
+
+`~/.local/share/chezmoi/.chezmoiignore` —— 排除憑證與機器專屬狀態，內容依〈刻意不納管〉那節；
+至少要擋掉 `auth.json`、`sessions/`、`*.sqlite`、`projects/`、`installation_id`、
+`.codex/skills/.system/` 與各類 `*.env`／金鑰檔。**寫完務必 `chezmoi managed` 確認憑證檔沒被收進去。**
+
+`~/.local/share/chezmoi/.gitattributes` —— 一行 `* -text`，關掉 git 的 CRLF 自動轉換
+（見〈已知的坑 3〉）。
+
+```powershell
+# 6. 建立遠端 repo 並推上去（private）
+chezmoi cd
+gh repo create changyiwu/dotfiles-agent-skills --private --source=. --remote=origin --push
+exit
+```
+
+推完之後，另外兩台就可以照〈新機器設定〉走了。
+
+---
+
 ## 新機器設定（第二、三台）
+
+> **前提：遠端 repo 已經存在。** 2026-07-28 現況是 repo 已刪除，所以這一節現在**還不能用** ——
+> 先完成上面的〈從零重建〉。
 
 最快的方式是跑本資料夾的腳本：
 
@@ -215,7 +286,8 @@ chezmoi edit ~/.claude/skills/claude-draw/SKILL.md
 
 ### 2. Windows 唯讀屬性
 
-`chezmoi add` 會把 Windows 目錄的唯讀屬性一起收進來，變成來源裡的 `readonly_` 前綴。套用到別台會把 `~/.gemini`、`~/.config/opencode` 設成唯讀，害 agent 寫不進去。第一台已清乾淨，之後 `chezmoi add` 完記得檢查：
+`chezmoi add` 會把 Windows 目錄的唯讀屬性一起收進來，變成來源裡的 `readonly_` 前綴。套用到別台會把 `~/.gemini`、`~/.config/opencode` 設成唯讀，害 agent 寫不進去。2026-07-22 那次初始化清掉了 13 個，但**那個來源 repo 已刪除**，
+重建時會整批重來一次，所以每次 `chezmoi add` 完都要檢查：
 
 ```powershell
 Get-ChildItem "$HOME\.local\share\chezmoi" -Recurse -Force -Directory |
@@ -299,10 +371,6 @@ skill 不能自動觸發（它只在對話進行中被模型載入時才執行�
 
 需要 **Windows 工作排程器 + 一支同步腳本**。
 這條才蓋得到「不經過 agent 的改動」。
-
-觸發方式建議用**定時輪詢（每 15 分鐘）**而不是 FileSystemWatcher：
-watcher 是即時的，但要處理去彈跳、編輯器暫存檔噪音，而且常駐行程被關掉就靜默失效。
-技能檔案不是每秒在變的東西，定時輪詢便宜又看得見。
 
 觸發方式建議用**定時輪詢（每 15 分鐘）**而不是 FileSystemWatcher：
 watcher 是即時的，但要處理去彈跳、編輯器暫存檔噪音，而且常駐行程被關掉就靜默失效。
