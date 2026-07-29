@@ -400,106 +400,127 @@ winget 把 chezmoi 加進了**使用者 PATH**，但已經開著的 process 拿�
 
 ---
 
-## 未來可能做的自動化（尚未啟用，2026-07-22 暫緩決定）
+## 自動化設計（2026-07-29 定案，待重建完成後實作）
 
 目前是全手動：改完技能自己 `chezmoi add`、自己 `git push`、到另一台自己 `chezmoi update`。
-以下是要走向自動化時的評估結果，先記著，之後再決定要不要做。
+本節是走向自動化的設計。**前提是 chezmoi 已經重建起來**，所以這是〈從零重建〉之後的事。
 
-### chezmoi 內建的 autoCommit / autoPush
+### 設計原則：風險窗口只有「換電腦」
+
+2026-07-22 的舊版評估提出兩條路（對話觸發 skill／排程器輪詢自動同步），
+兩者其實是同一個假設的兩種寫法 —— **讓機器隨時猜你什麼時候想同步**。
+但這個專案真正會出事的時刻只有一個：**在 A 機改完技能、跑去 B 機開工**。
+
+而那個時刻已經有東西卡在上面了 —— `cross-device-agent-skills` 的 `startup` / `shutdown`。
+它們的步驟 0 已經在跑 `chezmoi status`，只是**只偵測、不處理**。
+把那一步從「偵測」延伸成「處理」，自動化就成立了，而且不需要任何新機制。
+
+### 第 1 層（核心）：同步綁在 session 邊界
+
+| 時機 | 動作 | 方向 |
+|---|---|---|
+| 開工（`startup` 步驟 0） | `chezmoi git -- pull --rebase` → `chezmoi diff` → 確認後 `chezmoi apply` | 拉別台的下來 |
+| 收工（`shutdown` 步驟 0） | `chezmoi add --recursive` 四個目錄 → 清 `readonly_` → `pull --rebase` → `push` → **確認 push 真的成功** | 把這台的推上去 |
+
+比舊版兩條路好在三點：
+
+1. **衝突發生時你人在鍵盤前**，而且對話裡就有一個能處理 rebase 衝突的 agent。
+   排程器撞上 non-fast-forward 只能寫進日誌等你哪天想起來看。
+2. **不會靜默失效。** 排程器被關掉、腳本壞掉是看不見的；`shutdown` 少跑一步會直接印在對話裡。
+   下面〈autoPush 的靜默失敗〉那個坑，在這裡是當場可見的。
+3. **順序天生就對。** 下面〈開機自動 update 的陷阱〉說「不能只跑 `chezmoi update`，要先推再拉」——
+   開工拉、收工推，本來就是這個順序，不用特別記。
+
+> ⚠️ 這需要改的是 `cross-device-agent-skills` 的三技能內容，**不是本專案的檔案**。
+> 依〈兩套同步機制的分工邊界〉，三技能的權威來源在對方那邊，改完再由 `Copy-Item` 分發。
+
+### 第 2 層（護欄）：用 chezmoi hooks，別把步驟寫進每支腳本
+
+chezmoi 設定檔支援 `hooks.<command>.pre.command` / `.post.command`（[官方 variables 文件](https://www.chezmoi.io/reference/configuration-file/variables/)）。
+把兩個一直復發的步驟掛上去：
+
+- `hooks.add.post` → 清 `readonly_` 的那段 PowerShell（見〈已知的坑 2〉）
+- push 前置 → `git pull --rebase`
+
+這樣不管是你手動打指令、agent 代跑、還是排程器跑，**都一定會執行**，
+不必在技能和腳本裡各維護一份步驟（那是遲早會走鐘的重複）。
+
+> 🔬 **未實測。** 三台都還沒裝 chezmoi，hook 的實際行為（尤其 post hook 在指令失敗時會不會跑、
+> 掛在哪個 command 上最準）要建置完當場驗證，別先照抄。
+
+### 第 3 層（兜底）：排程器降級成唯讀提醒
+
+舊版路線 B 不用整個砍掉，但它唯一補得到的價值是
+「你直接用檔案總管把技能資料夾拖進 `~/.codex/skills/`」這種不經過 agent 的改動。
+**這件事只需要偵測，不需要修。**
+
+工作排程器每天跑一次 `chezmoi status`，有輸出就跳 Windows 通知，**不做任何寫入**。
+
+因為它不 add、不 push、不 rebase，就不可能弄壞東西 —— 舊版路線 B 要處理的四個雷全部消失：
+
+1. ~~要用 `chezmoi add --recursive` 不能用 `re-add`（`re-add` 只更新已納管檔案，新技能永遠進不來）~~
+2. ~~刪除偵測（家目錄刪掉技能，來源不會跟著刪，下次 `apply` 會復活，要 `chezmoi forget`）~~
+3. ~~`readonly_` 每輪都要清~~ → 移到第 2 層的 hook
+4. ~~push 前要 `pull --rebase`~~ → 移到第 1 層的收工流程
+
+> 其中第 1、2 點仍然適用於**第 1 層的收工流程**：收工要用 `add --recursive`，
+> 而「這台刪掉的技能」目前沒有自動處理，得手動 `chezmoi destroy` 或 `chezmoi forget`。
+
+### 第 4 層（設定）：`autoCommit = true`、`autoPush = false`
 
 寫在 `~/.config/chezmoi/chezmoi.toml`：
 
 ```toml
 [git]
     autoCommit = true
-    autoPush = true
+    autoPush = false
 ```
 
-效果：**只要 chezmoi 動到來源目錄（`chezmoi add`、`chezmoi edit`、`chezmoi forget` 等），
-它就會自動 commit 並 push。** commit 訊息由 chezmoi 自動產生。
+只要 chezmoi 動到來源目錄（`chezmoi add`、`chezmoi edit`、`chezmoi forget` 等），
+就自動 commit，commit 訊息由 chezmoi 產生。commit 是本地的、可逆的、免費的，
+開著能保證改動不會漏記。
 
-這兩個是合法設定但目前沒寫進 `chezmoi.toml`，所以是關的。要開只需加上面那三行，
-不需要任何腳本。
+**push 留給收工一次做完並肉眼確認。** 理由見下面兩個坑。
 
-**但它只解決一半。** 它是在「chezmoi 被呼叫時」才動作 —
-如果你直接去編輯 `~/.claude/skills/...`（改的是 target，不是 source），
-chezmoi 根本不知道發生過這件事，autoCommit 也不會被觸發。
-要讓「改動 → 自動入庫」成立，還是需要有東西去呼叫 `chezmoi add`。
+> 注意 `autoCommit` 只在「chezmoi 被呼叫時」才動作。
+> 你直接編輯 `~/.claude/skills/...`（改的是 target，不是 source），chezmoi 根本不知道 ——
+> 那是靠第 1 層的收工 `add` 和第 3 層的排程提醒接住的。
 
-那個「東西」有兩條路，可以並存，也可以只做其中一條。
+### 為什麼 autoPush 要關
 
-### 路線 A：對話觸發式（寫成 skill）
-
-在任何資料夾對 agent 說「把這個技能加到全域技能，再加到 chezmoi」，
-由 agent 替你呼叫 `chezmoi add` — 一樣會觸發 autoCommit / autoPush，直接推上 GitHub。
-
-skill 不能自動觸發（它只在對話進行中被模型載入時才執行），
-但它可以確保**你觸發時做對**，這才是它的價值。所以 skill 的內容不是「跑 `chezmoi add`」一句話，
-而是這套完整程序：
-
-1. 先 `chezmoi git -- pull --rebase`
-2. 寫進正確的 agent 目錄，遵守命名慣例（`claude-*` / `codex-*` / `opencode-*` / `antigravity-*`）
-3. `chezmoi add --recursive <技能路徑>`
-4. `chezmoi chattr noreadonly <技能路徑>` — 清掉這次 add 帶進來的唯讀屬性
-5. 確認 push **真的成功了**，不是只有 commit 成功
-
-第 4、5 步不能省，理由見下面〈自動化讓兩個舊坑變更糟〉。
-
-**這條路蓋不到的情況**：你直接在檔案總管把技能資料夾拖進 `~/.codex/skills/`，
-或用別的編輯器改了 SKILL.md — 你沒開口，就沒人會呼叫 chezmoi。那要靠路線 B。
-
-### 路線 B：排程器（改動就自動同步）
-
-需要 **Windows 工作排程器 + 一支同步腳本**。
-這條才蓋得到「不經過 agent 的改動」。
-
-觸發方式建議用**定時輪詢（每 15 分鐘）**而不是 FileSystemWatcher：
-watcher 是即時的，但要處理去彈跳、編輯器暫存檔噪音，而且常駐行程被關掉就靜默失效。
-技能檔案不是每秒在變的東西，定時輪詢便宜又看得見。
-
-腳本必須處理這四個雷（都是在第一台實際踩過或確認過的）：
-
-1. **要用 `chezmoi add --recursive`，不能用 `chezmoi re-add`** —
-   `re-add` 只更新已納管的檔案，新增的技能永遠不會進來。
-2. **刪除偵測** — 在家目錄刪掉一個技能，來源不會跟著刪，下次 `apply` 會讓它復活。
-   腳本得找出「已納管但目標已不存在」的路徑並 `chezmoi forget`。
-3. **`readonly_` 屬性會一直復發** — 每次 `add` 都會把 Windows 唯讀屬性重新收進來
-   （見上面〈已知的坑 2〉），腳本每輪都要清一次。
-4. **push 前要 `git pull --rebase`** — 三台都在自動推，遲早撞上 non-fast-forward，
-   撞到就會靜默失敗直到你發現時已經歪很久。
-
-### 自動化讓兩個舊坑變更糟（A、B 兩條路都適用）
-
-手動流程至少在 push 前還有機會看到問題。一旦 autoPush 開著，就沒有那個空檔了。
-
-**1. `readonly_` 會被立刻靜默推給另外兩台**
-
-每次 `chezmoi add` 都會重新收進 Windows 唯讀屬性（第一台初始化時清掉了 13 個）。
-加上 autoPush，這個壞狀態會馬上上 GitHub，另外兩台一 `chezmoi update`
-就把 `~/.gemini`、`~/.config/opencode` 設成唯讀，害 agent 寫不進去。
-所以每次 add 後都要接 `chezmoi chattr noreadonly <路徑>`。
-
-**2. autoPush 只 push，不 pull**
+**1. autoPush 只 push，不 pull（靜默失敗）**
 
 別台先推過的話會撞上 non-fast-forward。此時狀態很尷尬：
 **commit 已經進了本機，只有 push 失敗。**
 如果沒仔細看輸出（agent 代跑時很常見），會以為成功了，
 然後本機默默累積一堆沒推上去的 commit，直到某天發現別台一直拿不到新技能。
-所以動手前先 `chezmoi git -- pull --rebase`，動完確認 push 真的成功。
 
-### 如果要做到「開機自動 update」
+**2. `readonly_` 會被立刻靜默推給另外兩台**
 
-工作排程器設登入觸發、延遲 1–2 分鐘等網路就緒。
+每次 `chezmoi add` 都會重新收進 Windows 唯讀屬性（第一台初始化時清掉了 13 個）。
+若 autoPush 開著，這個壞狀態會馬上上 GitHub，另外兩台一 `chezmoi update`
+就把 `~/.gemini`、`~/.config/opencode` 設成唯讀，害 agent 寫不進去。
+第 2 層的 hook 是為了讓這件事**在 push 之前**一定被清掉。
 
-**但不能只跑 `chezmoi update`。** `update` = pull + apply，
+### 開機自動 update 的陷阱
+
+若哪天想加「登入時自動同步」（工作排程器設登入觸發、延遲 1–2 分鐘等網路就緒），
+**不能只跑 `chezmoi update`。** `update` = pull + apply，
 而 apply 會拿來源覆蓋家目錄，**會蓋掉這台還沒收進來的本機改動**。
-正確順序是「先把這台的改動推上去，再拉別台的下來」。
+正確順序是「先把這台的改動推上去，再拉別台的下來」—— 也就是第 1 層那個順序。
 
-### 尚未決定的問題
+### 被否掉的替代方案
 
-**同步失敗時（例如 rebase 遇到衝突）該怎麼辦？**
-建議是停下來、寫進日誌、跳 Windows 通知，而不是自動用某一邊覆蓋 —
-技能是手寫的東西，自動選邊很可能默默弄丟剛寫的版本。
+**「乾脆四個技能目錄做 junction 指到 Google 雲端硬碟，讓 GDrive 自己同步」** —— 不行：
+
+- 沒有版本歷史。技能是手寫的，被覆蓋掉就沒了。
+- GDrive 產生的衝突副本會變成 `SKILL (1).md` 直接躺在 skills 目錄裡，影響技能載入。
+- 〈已知的坑 5〉的 GDrive vs `.git` 打架問題還在。
+
+### 同步失敗時怎麼辦
+
+**不要自動用某一邊覆蓋。** 技能是手寫的東西，自動選邊很可能默默弄丟剛寫的版本。
+第 1 層的設計本來就把衝突推到「你人在鍵盤前」的時刻，停下來處理即可。
 
 **為什麼是 rebase 而不是 merge？** 三台從同一個 commit 各自長出新 commit 時，
 後推的那台會被 git 擋下（non-fast-forward）。`merge` 會生一個合併 commit 把兩條線接起來，

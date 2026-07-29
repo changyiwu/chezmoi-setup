@@ -47,13 +47,17 @@
 
 - [ ] 把 `chezmoi-sync/` 從本專案 `Copy-Item` 到四家技能目錄，再 `chezmoi add --recursive` 收進來源
 - [ ] 回報 `cross-device-agent-skills`：階段五達成，該專案步驟 0 的 `chezmoi status` 從此真的看得見技能副本漂移
-- [ ] 決定是否啟用自動化同步（autoCommit/autoPush、對話觸發 skill、工作排程器）— 2026-07-22 暫緩
+- [ ] **實作自動化同步**（2026-07-29 定案設計，見 [README.md](README.md)〈自動化設計〉四層）：
+  - [ ] 第 1 層：把同步塞進 `cross-device-agent-skills` 三技能的步驟 0 —— 開工 `pull --rebase`＋`diff`＋`apply`，收工 `add --recursive` 四目錄＋清 `readonly_`＋`pull --rebase`＋`push`。**要改的是對方的檔案，不是本專案**
+  - [ ] 第 2 層：`chezmoi.toml` 掛 hooks（`hooks.add.post` 清 `readonly_`、push 前置 `pull --rebase`），行為未實測，建置完當場驗
+  - [ ] 第 3 層：工作排程器每天跑一次唯讀的 `chezmoi status` + Windows 通知（**不做任何寫入**）
+  - [ ] 第 4 層：`chezmoi.toml` 設 `autoCommit = true`、`autoPush = false`（autoPush 的靜默失敗理由見 README）
 
 ## 資料夾結構
 
 ```
 chezmoi-setup/
-├── README.md                    # 主文件：現況、核心概念、納管範圍、與 cross-device 的分工邊界、從零重建、新機器設定、日常流程、已知的坑、自動化評估
+├── README.md                    # 主文件：現況、核心概念、納管範圍、與 cross-device 的分工邊界、從零重建、新機器設定、日常流程、已知的坑、自動化設計
 ├── bootstrap-new-machine.ps1    # 第二/三台用的一鍵腳本（裝 chezmoi → init → diff → 等確認 → apply）※ 預設 repo 網址已失效
 ├── chezmoi-sync/                # 「chezmoi 同步」技能原始檔（未安裝、未納入同步機制）
 │   └── SKILL.md
