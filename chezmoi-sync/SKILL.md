@@ -162,7 +162,7 @@ chezmoi managed | ForEach-Object {
 
 反過來要小心：**`chezmoi apply` 會把這三個技能蓋成 source 的版本，可能比 GDrive 原始檔舊。** 有疑慮時先 `chezmoi diff` 看清楚，再去 `cross-device-agent-skills` 跑 `git diff HEAD --stat` 與 `git status -sb` 確認原始檔本身是不是最新（GDrive 偶爾會餵出過期內容，這種「兩邊一起舊」只有拿 git origin 當權威才看得出來）。
 
-> 反向依賴也要知道：那三個技能的「步驟 0」跑的就是 `chezmoi status`。所以 **chezmoi 沒建起來之前，對方那道前置檢查是空轉的**（沒裝就整步略過）。這是本專案存在的理由，見 `chezmoi-setup/agents.md`。
+> 反向依賴也要知道（2026-07-29 起）：那三個技能的「步驟 0」**直接委派本技能**——載入後跑到「步驟 2：落差 B」為止，三處都乾淨就靜靜往下做，任一段有落差才升級成完整流程（步驟 3、4）並暫停對方。所以本技能是那三個技能的前置關卡，動到步驟 1、2 的判讀時要想到那邊會一起受影響。而 **chezmoi 沒建起來、或本技能還沒安裝到該台的技能目錄之前，對方那道前置檢查是空轉的**（沒裝就整步略過）。這是本專案存在的理由，見 `chezmoi-setup/agents.md`。
 
 ## 納管範圍的兩個常見漏項（順手檢查）
 
