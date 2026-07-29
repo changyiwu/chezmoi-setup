@@ -32,6 +32,10 @@ agent-skills                                                  .agents/skills/
 
 ## 步驟 0：環境檢查（沒過就不用往下做）
 
+> ⚠️ **2026-07-29 現況：三台都還沒有 chezmoi，遠端 repo `changyiwu/dotfiles-agent-skills` 已刪除。**
+> 方向已定案要重建，但還沒動工。在重建完成前，這個技能在任何一台都只會走到「尚未建置」那格就停住 ——
+> 這是預期行為，不是壞掉。重建步驟見 `chezmoi-setup/README.md`〈從零重建〉。
+
 ```powershell
 Get-Command chezmoi -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
 Test-Path "$HOME\.local\share\chezmoi"
@@ -41,8 +45,8 @@ Test-Path "$HOME\.local\share\chezmoi"
 |------|--------|
 | 兩者都有 | 往下走 |
 | 找不到 `chezmoi` 但**剛用 winget 裝過** | PATH 還沒生效（README 已知的坑 4）。去 `$HOME\AppData\Local\Microsoft\WinGet\Packages\` 找 `chezmoi.exe` 直接用完整路徑跑，並告訴使用者「這個 session 之後要重開才吃得到 PATH」 |
-| 找不到 `chezmoi`，也沒裝過 | **這台還沒 bootstrap**。停在這裡，回報「這台是第 2／3 台、尚未設定」，建議跑 `chezmoi-setup\bootstrap-new-machine.ps1`，**不要**自己 winget install |
-| 有 `chezmoi` 但來源目錄不存在 | 裝了沒 init。建議 `chezmoi init https://github.com/changyiwu/dotfiles-agent-skills.git`（只複製 repo，不動家目錄），然後**先 diff 再說** |
+| 找不到 `chezmoi`，也沒裝過 | **先確認整體是否已重建**（見上方警告）。若遠端 repo 仍不存在 → 回報「尚未建置」，指向〈從零重建〉，到此為止。若已重建 → 這台是第 2／3 台，建議跑 `chezmoi-setup\bootstrap-new-machine.ps1`。兩種情況都**不要**自己 winget install |
+| 有 `chezmoi` 但來源目錄不存在 | 裝了沒 init。建議 `chezmoi init https://github.com/changyiwu/dotfiles-agent-skills.git`（只複製 repo，不動家目錄），然後**先 diff 再說**。若該 repo 尚未重建，`init` 會失敗 —— 那就是「尚未建置」，改走〈從零重建〉 |
 
 ## 步驟 1：落差 A —— 家目錄 vs 來源
 
@@ -147,25 +151,29 @@ chezmoi managed | ForEach-Object {
 - ❌ 沒裝 chezmoi 就別硬跑，也別自己 winget install —— 走 `bootstrap-new-machine.ps1`
 - ❌ fetch 失敗時不要假裝知道遠端狀態
 
-## 兩套同步機制會打架的地方（重要）
+## 兩套同步機制的接縫（重要）
 
-`project-init` / `startup` / `shutdown` 這三個技能**同時被兩套機制管**：
+`project-init` / `startup` / `shutdown` 這三個技能**同時被兩套機制碰到**：
 
-1. **GDrive + `check-sync.ps1`** —— 原始檔在 `我的雲端硬碟/agents/cross-device-agent-skills/`，用 `Copy-Item` 覆蓋四份安裝副本
-2. **chezmoi** —— 家目錄的技能目錄整包納管
+1. **GDrive `Copy-Item`** —— 原始檔在 `我的雲端硬碟/agents/cross-device-agent-skills/`，用 README 那段 `Copy-Item` **單向**覆蓋四份安裝副本。那是這三個技能的權威來源
+2. **chezmoi** —— 家目錄四個技能目錄整包納管，負責三台之間的**雙向**同步
 
-所以跑完 `check-sync.ps1 -Sync` 之後，`chezmoi status` 第一欄**必然**會出現這三個技能（target 被外部改動了）。這不是壞事，正解是 `chezmoi add --recursive` 把新版收進來源再推。看到這個組合時直接這樣解釋，不要當成異常。
+`Copy-Item` 是從 chezmoi 背後直接寫 target。所以跑完那段同步之後，`chezmoi status` 第一欄**必然**會出現這三個技能（意思是「你直接改了 target」）。**這不是壞事**，正解是 `chezmoi add --recursive` 把新版收進來源再推。看到這個組合直接這樣解釋，不要當成異常。
 
-反過來也要小心：`chezmoi apply` 會把這三個技能蓋成 source 的版本，可能比 GDrive 原始檔舊。有疑慮時用 `check-sync.ps1`（不加 `-Sync`）確認一下版本，那支腳本拿 git origin 當權威，抓得到「兩邊一起舊」。
+反過來要小心：**`chezmoi apply` 會把這三個技能蓋成 source 的版本，可能比 GDrive 原始檔舊。** 有疑慮時先 `chezmoi diff` 看清楚，再去 `cross-device-agent-skills` 跑 `git diff HEAD --stat` 與 `git status -sb` 確認原始檔本身是不是最新（GDrive 偶爾會餵出過期內容，這種「兩邊一起舊」只有拿 git origin 當權威才看得出來）。
 
-## 已知的文件落差（順手回報，別自己改）
+> 反向依賴也要知道：那三個技能的「步驟 0」跑的就是 `chezmoi status`。所以 **chezmoi 沒建起來之前，對方那道前置檢查是空轉的**（沒裝就整步略過）。這是本專案存在的理由，見 `chezmoi-setup/agents.md`。
 
-`chezmoi-setup/README.md` 的〈納管範圍〉表寫 Codex 是 `~/.codex/skills/`，但實際上 `~/.codex/skills/` 只有不納管的 `.system/`，Codex 的使用者技能在 **`~/.agents/skills/`**。檢查時若發現來源沒有對應 `~/.agents/skills/` 的項目，代表 Codex 那份**根本沒被同步**，回報給使用者決定要不要補納管。
+## 納管範圍的兩個常見漏項（順手檢查）
+
+- **Codex 在 `~/.agents/skills/`，不是 `~/.codex/skills/`**（後者只有不納管的 `.system/`）。若 `chezmoi managed` 裡沒有對應 `.agents/skills/` 的項目，代表 Codex 那份**根本沒被同步**，回報給使用者決定要不要補納管
+- 四個目錄的技能**數量本來就不同**（各家有各家專屬的 `claude-*`／`codex-*`／`opencode-*`／`antigravity-*`），不要把數量差異當成漏同步
 
 ## 注意事項
 
 - 所有訊息使用**繁體中文**
 - **原始檔位置（2026-07-28 起）**：`我的雲端硬碟/agents/chezmoi-setup/chezmoi-sync/`，隨本專案 repo 版控。
   目前**未安裝到任何 Agent 的技能目錄，也未納入任何同步機制** —— 要用的話手動 `Copy-Item` 到該台的技能目錄。
-  原本規劃是等 chezmoi 重建後由 chezmoi 自己納管，但重建與否尚未決定。**不要**放進 `cross-device-agent-skills`，那是另一套機制
+  **既定規劃（2026-07-29 定案）**：chezmoi 重建完成後，`Copy-Item` 到四家技能目錄，再 `chezmoi add --recursive` 交給 chezmoi 納管。
+  **不要**放進 `cross-device-agent-skills`，那是另一套機制、另一個受眾（公開教學專案）
 - 來源 repo `~/.local/share/chezmoi` **不可放進 Google 雲端硬碟**（git working tree 會跟同步引擎打架）

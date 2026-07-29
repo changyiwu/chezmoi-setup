@@ -6,12 +6,18 @@
   安裝 chezmoi、拉取 dotfiles repo、顯示將要套用的差異，
   然後等你確認才真的寫入家目錄。詳細說明見 README.md。
 
+  ⚠️ 2026-07-29 現況：預設的 $RepoUrl 指向「已被刪除」的 repo，
+     現在直接跑會在第 2 步 chezmoi init 失敗。
+     這支腳本是給第 2／3 台用的，前提是第一台已經走完 README〈從零重建〉、
+     把來源 repo 推上 GitHub。重建完成後記得回來更新下面的預設值。
+
 .EXAMPLE
   .\bootstrap-new-machine.ps1
 #>
 
 [CmdletBinding()]
 param(
+    # ⚠️ 這個 repo 目前不存在（見上方 .DESCRIPTION）。第一台重建完成後更新此預設值。
     [string] $RepoUrl = 'https://github.com/changyiwu/dotfiles-agent-skills.git'
 )
 

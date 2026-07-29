@@ -2,7 +2,7 @@
 
 三台 Windows 電腦之間，同步 Claude Code / Codex / OpenCode / Antigravity 的**全域技能目錄**。
 
-> ## ⚠️ 現況：尚未建置（2026-07-28 更正）
+> ## ⚠️ 現況：尚未建置，方向已定案為「重建」（2026-07-29）
 >
 > 這份文件描述的架構**目前沒有在運作**：
 >
@@ -17,6 +17,25 @@
 >
 > 要重新啟用，**不能**走〈新機器設定〉（那條路的前提是遠端 repo 已存在），要先走〈從零重建〉。
 > 其餘章節的**觀念與指令仍然有效**，只是現在還沒有東西可以套用。
+>
+> ### ✅ 為什麼決定重建（2026-07-29）
+>
+> 姊妹專案 `cross-device-agent-skills` 於同日重新設計（commit `aaf273d`）：**刪掉自建的
+> `check-sync.ps1`，`project-init`／`startup`／`shutdown` 三技能的「步驟 0」改跑 `chezmoi status`。**
+>
+> 這讓原本擱置的三選一收斂成一條路：
+>
+> | 原選項 | 結果 |
+> |---|---|
+> | 改用 GDrive `check-sync.ps1` 那套涵蓋所有技能 | **路已封** —— 腳本自己被刪了 |
+> | 先不動 | 讓對方的步驟 0 **永遠空轉**（沒裝 chezmoi 就整步略過） |
+> | **重建 chezmoi** | **只剩這條** |
+>
+> 性質也跟著變了：本專案從「可有可無的獨立專案」變成 cross-device **階段五的前置依賴**。
+> 原本「安裝副本落後就照舊版邏輯默默跑完」這個盲點，`check-sync.ps1` 走掉之後**現在沒人在守**，
+> 要等 chezmoi 建起來才補得回去。
+>
+> **下一個待決事項：哪一台當「第一台」。** 這是整個流程唯一不可逆的環節，見〈從零重建〉第 0 步。
 
 - **本機來源目錄（重建後）**：`~/.local/share/chezmoi`
 
@@ -90,6 +109,63 @@ chezmoi 的整個模型就是**兩個地方 + 兩個方向**。搞懂這張圖�
 
 排除規則寫在來源目錄的 `.chezmoiignore`。
 
+### 這台（PC-YI-SL）現有的技能盤點（2026-07-29 實測）
+
+| 目錄 | 數量 | 內容 |
+|---|---|---|
+| `~/.claude/skills/` | 9 | `claude-draw`／`-env-setup`／`-firebase`／`-github`／`-notebooklm`／`-obsidian` ＋ 三技能 |
+| `~/.agents/skills/` | 10 | `codex-draw`／`-env-setup`／`-essentials`／`-firebase`／`-github`／`-notebooklm`／`-obsidian` ＋ 三技能 |
+| `~/.config/opencode/skills/` | 11 | `opencode-browser`／`-draw`／`-env-setup`／`-firebase`／`-github`／`-install-all`／`-notebooklm`／`-obsidian` ＋ 三技能 |
+| `~/.gemini/config/skills/` | 8 | `antigravity-draw`／`-firebase`／`-github`／`-notebooklm`／`-obsidian` ＋ 三技能 |
+
+「三技能」= `project-init`＋`startup`＋`shutdown`，四家都有、內容相同。
+
+> **四個目錄數量不一樣是正常的，不要「修正」它。** 各家有各家專屬的技能
+> （`opencode-browser`、`codex-essentials` 只有那一家有），chezmoi 是四個目錄各自納管、
+> 不做交叉比對。`chezmoi-sync` 目前四家都沒有（本專案還沒安裝它）。
+
+---
+
+## 兩套同步機制的分工邊界
+
+技能檔案同時被**兩套機制**碰到，兩者管的東西不同、方向也不同。搞混就會互相覆蓋。
+
+```
+   cross-device-agent-skills（GDrive 原始檔）
+                │
+                │  Copy-Item（單向，只有三技能）
+                ▼
+   家目錄四個技能目錄 ── chezmoi add ──► source ── git push ──► GitHub
+   （target）          ◄── apply ────         ◄── pull ────
+                                        （雙向，四個目錄全部）
+```
+
+| | 誰負責 | 管什麼 | 方向 |
+|---|---|---|---|
+| **A** | `cross-device-agent-skills` 的 `Copy-Item` 段 | 只有 `project-init`／`startup`／`shutdown` | GDrive 原始檔 → 四份安裝副本，**單向** |
+| **B** | chezmoi（本專案） | 四個技能目錄的**全部**內容 | 家目錄 ↔ 來源 repo ↔ GitHub，**雙向、跨三台** |
+
+### 接縫：跑完 A 之後 B 一定會亮
+
+`Copy-Item` 是從 chezmoi 背後直接寫 target。所以每次同步完三技能，`chezmoi status` 的
+**第一欄必然出現那三個技能**（意思是「你直接改了 target」）。
+
+**這不是異常，正解是把新版收進來源：**
+
+```powershell
+chezmoi add --recursive ~/.claude/skills/project-init  # 四家、三個技能各一次
+chezmoi cd; git commit -am "sync 三技能 vX"; git push; exit
+```
+
+反過來的風險更需要留意：**`chezmoi apply` 會把三技能蓋成 source 的版本，可能比 GDrive 原始檔舊。**
+有疑慮時先 `chezmoi diff` 看清楚，並回 `cross-device-agent-skills` 用 `git diff HEAD --stat`
+確認原始檔本身是不是最新的（GDrive 偶爾會餵出過期內容）。
+
+### 為什麼不把三技能也交給 chezmoi 一家管
+
+`cross-device-agent-skills` 是**公開的教學專案**（EP06 懶人包），原始檔要留在 GDrive 讓人 clone；
+chezmoi 來源 repo 是 private 的個人 dotfiles。兩者受眾不同，維持 A 為權威來源、B 只做跨機分發最單純。
+
 ---
 
 ## 從零重建（2026-07-28 現況該走的路）
@@ -102,6 +178,11 @@ chezmoi 的整個模型就是**兩個地方 + 兩個方向**。搞懂這張圖�
 
 **第 0 步：先決定哪一台的技能是「正確版本」。** 這一步比任何指令都重要 —— 之後另外兩台
 `chezmoi apply` 會被這一台的內容覆蓋。三台的技能目錄若已經各自長歪，先人工比對決定要留哪些。
+
+> 💡 **三技能可以先不用煩惱。** `project-init`／`startup`／`shutdown` 有獨立的權威來源
+> （GDrive 的 `cross-device-agent-skills`），第一台開跑前先在那邊跑一次 `Copy-Item` 段
+> 把四份副本刷成最新，就不必比對了。第 0 步真正要人工判斷的只有**各家專屬技能**
+> （`claude-*`／`codex-*`／`opencode-*`／`antigravity-*`），以及 lazy-packs 那些來源。
 
 ```powershell
 # 1. 安裝，然後重開 PowerShell（PATH 才會生效，見〈已知的坑 4〉）
