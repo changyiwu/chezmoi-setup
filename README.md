@@ -78,9 +78,8 @@ chezmoi 的整個模型就是**兩個地方 + 兩個方向**。搞懂這張圖�
 
 > 補充：chezmoi 官方文件裡還有第三個詞。source 經過模板運算後產生的理想狀態叫
 > **target state**，家目錄本身叫 **destination directory**。目前沒用模板，
-> 所以這兩個是同一件事，可以先不管。等哪天把 `claude-draw/SKILL.md` 改成模板
-> （見〈已知的坑 1〉），差別才會浮現：source 存的是 `{{ .chezmoi.homeDir }}`，
-> target state 是算完的 `C:/Users/chang`。
+> 所以這兩個是同一件事，可以先不管。唯一差點需要模板的是 draw 技能的絕對路徑，
+> 但那件事已經從懶人包源頭修掉了（見〈已知的坑 1〉），所以四個技能目錄維持純文字即可。
 
 ---
 
@@ -161,65 +160,120 @@ chezmoi cd; git commit -am "sync 三技能 vX"; git push; exit
 有疑慮時先 `chezmoi diff` 看清楚，並回 `cross-device-agent-skills` 用 `git diff HEAD --stat`
 確認原始檔本身是不是最新的（GDrive 偶爾會餵出過期內容）。
 
-### 為什麼不把三技能也交給 chezmoi 一家管
-
-`cross-device-agent-skills` 是**公開的教學專案**（EP06 懶人包），原始檔要留在 GDrive 讓人 clone；
-chezmoi 來源 repo 是 private 的個人 dotfiles。兩者受眾不同，維持 A 為權威來源、B 只做跨機分發最單純。
-
 ---
 
-## 從零重建（2026-07-28 現況該走的路）
+## 從零重建（第一台專用）
 
 遠端 repo 已刪除，所以現在**沒有可以 `init` 的來源**。要重新啟用，得先挑一台當「第一台」，
-把它家目錄的技能收成新的來源 repo，推上 GitHub，另外兩台才有東西可拉。
+把它家目錄的技能收成新的來源 repo、推上 GitHub，另外兩台才有東西可拉
+（另外兩台走〈新機器設定〉，不要走這一節）。
 
-> ⚠️ 下面的步驟是**依本文件其餘章節的觀念推導出來的，尚未實際跑過驗證**（2026-07-28 三台都沒裝
-> chezmoi，無法當場測）。第一次做的時候逐步確認，跑完把實際遇到的差異回填進這一節。
+> ⚠️ **這一節尚未實跑驗證**（2026-07-29 三台都沒裝 chezmoi，無法當場測），
+> 是依本文件其餘章節推導出來的。第一次做請逐步確認，跑完把實際差異回填進來。
 
-**第 0 步：先決定哪一台的技能是「正確版本」。** 這一步比任何指令都重要 —— 之後另外兩台
-`chezmoi apply` 會被這一台的內容覆蓋。三台的技能目錄若已經各自長歪，先人工比對決定要留哪些。
+全流程七步，照順序做：
+
+| 步驟 | 做什麼 |
+|---|---|
+| 0 | 決定哪一台當第一台（**唯一不可逆**） |
+| 1 | 安裝 chezmoi，重開 PowerShell |
+| 2 | `chezmoi init`（不帶 URL） |
+| 3 | 先寫 `.chezmoiignore` 與 `.gitattributes` |
+| 4 | `chezmoi add` 四個技能目錄 |
+| 5 | 清掉 `readonly_` |
+| 6 | 驗收 |
+| 7 | 建 GitHub repo 並推上去 |
+
+### 第 0 步：決定哪一台當第一台
+
+**這一步比任何指令都重要，而且不可逆** —— 之後另外兩台 `chezmoi apply` 會被這一台的內容覆蓋。
+三台的技能目錄若已經各自長歪，先人工比對決定要留哪些。
 
 > 💡 **三技能可以先不用煩惱。** `project-init`／`startup`／`shutdown` 有獨立的權威來源
 > （GDrive 的 `cross-device-agent-skills`），第一台開跑前先在那邊跑一次 `Copy-Item` 段
-> 把四份副本刷成最新，就不必比對了。第 0 步真正要人工判斷的只有**各家專屬技能**
+> 把四份副本刷成最新，就不必比對了。真正要人工判斷的只有**各家專屬技能**
 > （`claude-*`／`codex-*`／`opencode-*`／`antigravity-*`），以及 lazy-packs 那些來源。
 
+### 第 1 步：安裝 chezmoi
+
 ```powershell
-# 1. 安裝，然後重開 PowerShell（PATH 才會生效，見〈已知的坑 4〉）
 winget install --id twpayne.chezmoi
+```
 
-# 2. 建立空的來源目錄（不帶 URL = 從零開始，會順便 git init）
+裝完**要重開 PowerShell**，PATH 才會生效（見〈已知的坑 4〉）。若是 agent 代跑，agent 本身也要重開。
+
+### 第 2 步：建立空的來源目錄
+
+```powershell
 chezmoi init
+```
 
-# 3. 把四個技能目錄收進來源
+**不帶 URL** = 從零開始。它會建出 `~/.local/share/chezmoi` 並順便 `git init`。
+
+### 第 3 步：先寫兩個設定檔（在 add 之前）
+
+舊 repo 連同這兩個檔一起沒了，要從頭寫。**先寫再 add**，因為 `.gitattributes` 必須在任何檔案
+被 commit 之前就位，否則 CRLF 已經被轉過一輪了。
+
+`~/.local/share/chezmoi/.gitattributes` —— 只要一行，關掉 git 的 CRLF 自動轉換（見〈已知的坑 3〉）：
+
+```
+* -text
+```
+
+`~/.local/share/chezmoi/.chezmoiignore` —— 排除憑證與機器專屬狀態，內容依〈刻意不納管〉那節，
+至少擋掉 `auth.json`、`sessions/`、`*.sqlite`、`projects/`、`installation_id`、
+`.codex/skills/.system/` 與各類 `*.env`／金鑰檔。
+
+> 下一步只 `add` 四個技能目錄，憑證檔本來就進不來；`.chezmoiignore` 是防呆，
+> 擋的是哪天手滑打成 `chezmoi add ~/.claude` 那種情況。
+
+### 第 4 步：把四個技能目錄收進來源
+
+```powershell
 chezmoi add --recursive ~/.claude/skills
 chezmoi add --recursive ~/.agents/skills
 chezmoi add --recursive ~/.config/opencode/skills
 chezmoi add --recursive ~/.gemini/config/skills
-
-# 4. 清掉這次 add 帶進來的 Windows 唯讀屬性（見〈已知的坑 2〉，一定要做）
-Get-ChildItem "$HOME\.local\share\chezmoi" -Recurse -Force -Directory |
-  Where-Object { $_.Name -match '^(readonly_|private_)' }
-# 有列出東西就對各該路徑跑 chezmoi chattr noreadonly <路徑>
 ```
 
-**第 5 步：重寫兩個被刪掉的設定檔**（舊 repo 沒了，這兩個要從頭寫）。
+路徑對照見〈納管範圍〉。注意 Codex 是 `~/.agents/skills`，不是 `~/.codex/skills`。
 
-`~/.local/share/chezmoi/.chezmoiignore` —— 排除憑證與機器專屬狀態，內容依〈刻意不納管〉那節；
-至少要擋掉 `auth.json`、`sessions/`、`*.sqlite`、`projects/`、`installation_id`、
-`.codex/skills/.system/` 與各類 `*.env`／金鑰檔。**寫完務必 `chezmoi managed` 確認憑證檔沒被收進去。**
+### 第 5 步：清掉 `readonly_`（一定要做）
 
-`~/.local/share/chezmoi/.gitattributes` —— 一行 `* -text`，關掉 git 的 CRLF 自動轉換
-（見〈已知的坑 3〉）。
+`chezmoi add` 會把 Windows 目錄的唯讀屬性一起收進來（見〈已知的坑 2〉）。先列出來：
 
 ```powershell
-# 6. 建立遠端 repo 並推上去（private）
+Get-ChildItem "$HOME\.local\share\chezmoi" -Recurse -Force -Directory |
+  Where-Object { $_.Name -match '^(readonly_|private_)' }
+```
+
+有列出東西的話，對**家目錄那一側**的對應路徑逐一清掉：
+
+```powershell
+chezmoi chattr noreadonly ~/.gemini/config/skills
+```
+
+2026-07-22 那次初始化清掉了 13 個，重建會整批重來一次。清完再跑一次上面的列表確認乾淨。
+
+### 第 6 步：驗收
+
+```powershell
+chezmoi managed     # 列出納管路徑 —— 確認憑證檔沒被收進去
+chezmoi status      # 沒輸出 = 來源與家目錄一致
+```
+
+### 第 7 步：建遠端 repo 並推上去
+
+```powershell
 chezmoi cd
+git add -A
+git commit -m "init: 四個 agent 的全域技能目錄"
 gh repo create changyiwu/dotfiles-agent-skills --private --source=. --remote=origin --push
 exit
 ```
 
-推完之後，另外兩台就可以照〈新機器設定〉走了。
+推完之後：更新 `bootstrap-new-machine.ps1` 的 `$RepoUrl`，另外兩台就可以照〈新機器設定〉走了。
 
 ---
 
@@ -342,28 +396,38 @@ chezmoi apply
 
 ## 已知的坑
 
-### 1. 寫死的絕對路徑
+### 1. 寫死的絕對路徑（✅ 2026-07-29 已從源頭解決）
 
-`~/.claude/skills/claude-draw/SKILL.md` 裡有：
+原本的坑：`~/.claude/skills/claude-draw/SKILL.md` 裡寫死 `C:/Users/chang/...`。三台使用者名稱
+剛好都是 `chang` 所以不會出事，但那是巧合，不是設計 —— 而且它會被 chezmoi 原封不動同步到三台。
 
-```
-C:/Users/chang/.claude/skills/claude-draw/draw.py
-```
+**當時的作法是把該檔轉成 chezmoi 模板（`{{ .chezmoi.homeDir }}`）。已改成從源頭修**，
+理由是模板只修得到 chezmoi 這條路徑上的副本，直接照懶人包安裝的人拿到的還是舊寫法。
+懶人包與安裝副本都寫成 `$HOME/...` 之後，**chezmoi 完全不需要為這件事開模板**，
+四個技能目錄維持純文字、三台通用。
 
-三台使用者名稱都是 `chang` 就沒問題。若哪天不是，把該檔轉成模板：
+實測盤點與處置（2026-07-29）：
 
-```powershell
-chezmoi chattr +template ~/.claude/skills/claude-draw/SKILL.md
-chezmoi edit ~/.claude/skills/claude-draw/SKILL.md
-```
+| Agent | 懶人包（權威來源） | 家目錄安裝副本 | 處置 |
+|---|---|---|---|
+| Claude Code | 原為 `C:/Users/<使用者>/` 佔位符 | 原為寫死 `C:/Users/chang/` | 兩邊都改 `$HOME/` |
+| Codex | 無腳本（走內建 Image Gen Skill） | 無腳本 | 不適用 |
+| OpenCode | `$HOME/.config/opencode/...` | 與懶人包一致 | 本來就對，未動 |
+| Antigravity | `$HOME/.gemini/config/...` | 落後一版，殘留 `.\skills\04-draw\scripts\` | 從懶人包重新同步 |
 
-路徑改成：
+實際改動的檔案：
 
-```
-{{ .chezmoi.homeDir | replace "\\" "/" }}/.claude/skills/claude-draw/draw.py
-```
+- `claude-code-lazy-packs/skills/08-draw/SKILL.md`
+- `claude-code-lazy-packs/08-安裝gpt-image-2生圖.md`（任務 4 的資料夾位置、內嵌的 SKILL.md 範本、任務 5 的驗證指令）
+- `~/.claude/skills/claude-draw/SKILL.md`
+- `~/.gemini/config/skills/antigravity-draw/SKILL.md`（整份覆蓋成懶人包版本）
 
-其他三個 agent 的 draw 技能也各自檢查。
+> ⚠️ **不要改成真正的「相對路徑」。** 技能被呼叫時的工作目錄是**當前專案**，不是技能目錄，
+> `.\skills\...` 這種寫法解不出來 —— Antigravity 的舊安裝副本就是死在這個寫法上。
+> 可攜的形式是 `$HOME/`（或 `~/`），PowerShell 與 bash 都吃得到。
+
+**維護提醒：日後新增任何會呼叫本地腳本的技能，路徑一律寫 `$HOME/`。** 一旦有人寫死絕對路徑，
+chezmoi 只會忠實地把它散佈到三台，不會幫你擋。
 
 ### 2. Windows 唯讀屬性
 
@@ -397,152 +461,6 @@ winget 把 chezmoi 加進了**使用者 PATH**，但已經開著的 process 拿�
 ### 5. 不要把來源 repo 放進 Google Drive
 
 `~/.local/share/chezmoi` 是 git working tree，雲端硬碟的同步引擎會跟 `.git` 打架、產生「衝突副本」。本資料夾（在雲端硬碟裡）只放這份說明和腳本，不放 repo 本身。
-
----
-
-## 自動化設計（2026-07-29 定案，待重建完成後實作）
-
-目前是全手動：改完技能自己 `chezmoi add`、自己 `git push`、到另一台自己 `chezmoi update`。
-本節是走向自動化的設計。**前提是 chezmoi 已經重建起來**，所以這是〈從零重建〉之後的事。
-
-### 設計原則：風險窗口只有「換電腦」
-
-2026-07-22 的舊版評估提出兩條路（對話觸發 skill／排程器輪詢自動同步），
-兩者其實是同一個假設的兩種寫法 —— **讓機器隨時猜你什麼時候想同步**。
-但這個專案真正會出事的時刻只有一個：**在 A 機改完技能、跑去 B 機開工**。
-
-而那個時刻已經有東西卡在上面了 —— `cross-device-agent-skills` 的 `startup` / `shutdown`。
-它們的步驟 0 已經在跑 `chezmoi status`，只是**只偵測、不處理**。
-把那一步從「偵測」延伸成「處理」，自動化就成立了，而且不需要任何新機制。
-
-### 第 1 層（核心）：同步綁在 session 邊界
-
-| 時機 | 動作 | 方向 |
-|---|---|---|
-| 開工（`startup` 步驟 0） | `chezmoi git -- pull --rebase` → `chezmoi diff` → 確認後 `chezmoi apply` | 拉別台的下來 |
-| 收工（`shutdown` 步驟 0） | `chezmoi add --recursive` 四個目錄 → 清 `readonly_` → `pull --rebase` → `push` → **確認 push 真的成功** | 把這台的推上去 |
-
-比舊版兩條路好在三點：
-
-1. **衝突發生時你人在鍵盤前**，而且對話裡就有一個能處理 rebase 衝突的 agent。
-   排程器撞上 non-fast-forward 只能寫進日誌等你哪天想起來看。
-2. **不會靜默失效。** 排程器被關掉、腳本壞掉是看不見的；`shutdown` 少跑一步會直接印在對話裡。
-   下面〈autoPush 的靜默失敗〉那個坑，在這裡是當場可見的。
-3. **順序天生就對。** 下面〈開機自動 update 的陷阱〉說「不能只跑 `chezmoi update`，要先推再拉」——
-   開工拉、收工推，本來就是這個順序，不用特別記。
-
-> ⚠️ 這需要改的是 `cross-device-agent-skills` 的三技能內容，**不是本專案的檔案**。
-> 依〈兩套同步機制的分工邊界〉，三技能的權威來源在對方那邊，改完再由 `Copy-Item` 分發。
-
-### 第 2 層（護欄）：用 chezmoi hooks，別把步驟寫進每支腳本
-
-chezmoi 設定檔支援 `hooks.<command>.pre.command` / `.post.command`（[官方 variables 文件](https://www.chezmoi.io/reference/configuration-file/variables/)）。
-把兩個一直復發的步驟掛上去：
-
-- `hooks.add.post` → 清 `readonly_` 的那段 PowerShell（見〈已知的坑 2〉）
-- push 前置 → `git pull --rebase`
-
-這樣不管是你手動打指令、agent 代跑、還是排程器跑，**都一定會執行**，
-不必在技能和腳本裡各維護一份步驟（那是遲早會走鐘的重複）。
-
-> 🔬 **未實測。** 三台都還沒裝 chezmoi，hook 的實際行為（尤其 post hook 在指令失敗時會不會跑、
-> 掛在哪個 command 上最準）要建置完當場驗證，別先照抄。
-
-### 第 3 層（兜底）：排程器降級成唯讀提醒
-
-舊版路線 B 不用整個砍掉，但它唯一補得到的價值是
-「你直接用檔案總管把技能資料夾拖進 `~/.codex/skills/`」這種不經過 agent 的改動。
-**這件事只需要偵測，不需要修。**
-
-工作排程器每天跑一次 `chezmoi status`，有輸出就跳 Windows 通知，**不做任何寫入**。
-
-因為它不 add、不 push、不 rebase，就不可能弄壞東西 —— 舊版路線 B 要處理的四個雷全部消失：
-
-1. ~~要用 `chezmoi add --recursive` 不能用 `re-add`（`re-add` 只更新已納管檔案，新技能永遠進不來）~~
-2. ~~刪除偵測（家目錄刪掉技能，來源不會跟著刪，下次 `apply` 會復活，要 `chezmoi forget`）~~
-3. ~~`readonly_` 每輪都要清~~ → 移到第 2 層的 hook
-4. ~~push 前要 `pull --rebase`~~ → 移到第 1 層的收工流程
-
-> 其中第 1、2 點仍然適用於**第 1 層的收工流程**：收工要用 `add --recursive`，
-> 而「這台刪掉的技能」目前沒有自動處理，得手動 `chezmoi destroy` 或 `chezmoi forget`。
-
-### 第 4 層（設定）：`autoCommit = true`、`autoPush = false`
-
-寫在 `~/.config/chezmoi/chezmoi.toml`：
-
-```toml
-[git]
-    autoCommit = true
-    autoPush = false
-```
-
-只要 chezmoi 動到來源目錄（`chezmoi add`、`chezmoi edit`、`chezmoi forget` 等），
-就自動 commit，commit 訊息由 chezmoi 產生。commit 是本地的、可逆的、免費的，
-開著能保證改動不會漏記。
-
-**push 留給收工一次做完並肉眼確認。** 理由見下面兩個坑。
-
-> 注意 `autoCommit` 只在「chezmoi 被呼叫時」才動作。
-> 你直接編輯 `~/.claude/skills/...`（改的是 target，不是 source），chezmoi 根本不知道 ——
-> 那是靠第 1 層的收工 `add` 和第 3 層的排程提醒接住的。
-
-### 為什麼 autoPush 要關
-
-**1. autoPush 只 push，不 pull（靜默失敗）**
-
-別台先推過的話會撞上 non-fast-forward。此時狀態很尷尬：
-**commit 已經進了本機，只有 push 失敗。**
-如果沒仔細看輸出（agent 代跑時很常見），會以為成功了，
-然後本機默默累積一堆沒推上去的 commit，直到某天發現別台一直拿不到新技能。
-
-**2. `readonly_` 會被立刻靜默推給另外兩台**
-
-每次 `chezmoi add` 都會重新收進 Windows 唯讀屬性（第一台初始化時清掉了 13 個）。
-若 autoPush 開著，這個壞狀態會馬上上 GitHub，另外兩台一 `chezmoi update`
-就把 `~/.gemini`、`~/.config/opencode` 設成唯讀，害 agent 寫不進去。
-第 2 層的 hook 是為了讓這件事**在 push 之前**一定被清掉。
-
-### 開機自動 update 的陷阱
-
-若哪天想加「登入時自動同步」（工作排程器設登入觸發、延遲 1–2 分鐘等網路就緒），
-**不能只跑 `chezmoi update`。** `update` = pull + apply，
-而 apply 會拿來源覆蓋家目錄，**會蓋掉這台還沒收進來的本機改動**。
-正確順序是「先把這台的改動推上去，再拉別台的下來」—— 也就是第 1 層那個順序。
-
-### 被否掉的替代方案
-
-**「乾脆四個技能目錄做 junction 指到 Google 雲端硬碟，讓 GDrive 自己同步」** —— 不行：
-
-- 沒有版本歷史。技能是手寫的，被覆蓋掉就沒了。
-- GDrive 產生的衝突副本會變成 `SKILL (1).md` 直接躺在 skills 目錄裡，影響技能載入。
-- 〈已知的坑 5〉的 GDrive vs `.git` 打架問題還在。
-
-### 同步失敗時怎麼辦
-
-**不要自動用某一邊覆蓋。** 技能是手寫的東西，自動選邊很可能默默弄丟剛寫的版本。
-第 1 層的設計本來就把衝突推到「你人在鍵盤前」的時刻，停下來處理即可。
-
-**為什麼是 rebase 而不是 merge？** 三台從同一個 commit 各自長出新 commit 時，
-後推的那台會被 git 擋下（non-fast-forward）。`merge` 會生一個合併 commit 把兩條線接起來，
-`rebase` 則是把你的 commit 拆下來重新接到遠端最新的後面，維持一條直線。
-這個 repo 是一個人的三台機器，歷史應該是一條「什麼時候改了什麼技能」的直線；
-用 merge 的話每次自動同步都會生一個空的 `Merge branch 'master'...`，
-跑幾個月後想查某個技能上次改動時間會被雜訊淹沒。
-
-代價是 rebase 不保證成功：兩台改到同一個檔案的同一行時，git 無法自行決定，會停下來等人處理。
-
-rebase 衝突的手動處理：
-
-```powershell
-chezmoi cd
-git status                  # 看哪些檔案衝突
-# 手動編輯，處理掉 <<<<<<< ======= >>>>>>> 標記
-git add .
-git rebase --continue
-exit
-```
-
-不想處理就 `git rebase --abort`，退回 pull 之前的狀態，什麼都沒發生。
 
 ---
 

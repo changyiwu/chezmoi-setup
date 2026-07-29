@@ -32,12 +32,13 @@
 - [x] 撰寫 `chezmoi-sync` 技能（口令「chezmoi 同步」，2026-07-28；尚未安裝、尚未納入同步機制）
 - [x] 文件校正到與歸零後的現況一致（2026-07-28）
 - [x] 依 cross-device 新設計重新規劃、方向定案（2026-07-29）
+- [x] 從源頭消滅 draw 技能的寫死絕對路徑（2026-07-29）—— 改 `claude-code-lazy-packs` 懶人包＋家目錄副本為 `$HOME/`，Antigravity 副本重新同步；chezmoi 因此不必為此開模板（見 [README.md](README.md)〈已知的坑 1〉）
 - [ ] ~~第一台電腦完成 chezmoi 初始化與四個 Agent 技能目錄納管（2026-07-22 曾完成）~~ → **已移除，需依〈從零重建〉重做**
 
 ### 重建（依序進行）
 
 - [ ] **決定哪一台當「第一台」** —— 2026-07-29 仍未定。這是整個流程**唯一不可逆**的環節：之後另外兩台 `chezmoi apply` 會被第一台的技能內容覆蓋
-- [ ] 第一台走〈從零重建〉：裝 chezmoi → `chezmoi init`（不帶 URL）→ `add` 四個技能目錄 → 清 `readonly_` → 重寫 `.chezmoiignore`／`.gitattributes` → `gh repo create` 推上去
+- [ ] 第一台走〈從零重建〉七步：裝 chezmoi → `chezmoi init`（不帶 URL）→ 先寫 `.gitattributes`／`.chezmoiignore` → `add` 四個技能目錄 → 清 `readonly_` → 驗收 → `gh repo create` 推上去
 - [ ] 把〈從零重建〉的實測差異回填 README（該章節目前是從其餘章節推導出來的，尚未實跑驗證）
 - [ ] 更新 `bootstrap-new-machine.ps1` 的預設 `$RepoUrl` 指向新 repo
 - [ ] 第二台電腦跑 bootstrap 完成設定
@@ -47,17 +48,12 @@
 
 - [ ] 把 `chezmoi-sync/` 從本專案 `Copy-Item` 到四家技能目錄，再 `chezmoi add --recursive` 收進來源
 - [ ] 回報 `cross-device-agent-skills`：階段五達成，該專案步驟 0 的 `chezmoi status` 從此真的看得見技能副本漂移
-- [ ] **實作自動化同步**（2026-07-29 定案設計，見 [README.md](README.md)〈自動化設計〉四層）：
-  - [ ] 第 1 層：把同步塞進 `cross-device-agent-skills` 三技能的步驟 0 —— 開工 `pull --rebase`＋`diff`＋`apply`，收工 `add --recursive` 四目錄＋清 `readonly_`＋`pull --rebase`＋`push`。**要改的是對方的檔案，不是本專案**
-  - [ ] 第 2 層：`chezmoi.toml` 掛 hooks（`hooks.add.post` 清 `readonly_`、push 前置 `pull --rebase`），行為未實測，建置完當場驗
-  - [ ] 第 3 層：工作排程器每天跑一次唯讀的 `chezmoi status` + Windows 通知（**不做任何寫入**）
-  - [ ] 第 4 層：`chezmoi.toml` 設 `autoCommit = true`、`autoPush = false`（autoPush 的靜默失敗理由見 README）
 
 ## 資料夾結構
 
 ```
 chezmoi-setup/
-├── README.md                    # 主文件：現況、核心概念、納管範圍、與 cross-device 的分工邊界、從零重建、新機器設定、日常流程、已知的坑、自動化設計
+├── README.md                    # 主文件：現況、核心概念、納管範圍、與 cross-device 的分工邊界、從零重建、新機器設定、日常流程、已知的坑、速查
 ├── bootstrap-new-machine.ps1    # 第二/三台用的一鍵腳本（裝 chezmoi → init → diff → 等確認 → apply）※ 預設 repo 網址已失效
 ├── chezmoi-sync/                # 「chezmoi 同步」技能原始檔（未安裝、未納入同步機制）
 │   └── SKILL.md
