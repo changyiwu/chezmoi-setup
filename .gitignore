@@ -6,3 +6,6 @@ desktop.ini
 credentials.*
 
 .claude/settings.local.json
+
+# 交接檔含真實電腦名與本機路徑，只走雲端硬碟同步，不進公開 repo
+handoff.md
