@@ -96,4 +96,9 @@ chezmoi-setup/
 - **不要直接編輯 `~/.claude/skills/...`** — 那是 target，下次 `apply` 會被 source 蓋回去；改用 `chezmoi edit` 或改完 `chezmoi add --recursive`
 - 每次 `chezmoi add` 後檢查有無 `readonly_` 前綴目錄跑進來源，有就 `chezmoi chattr noreadonly`
 - 憑證檔（`auth.json`、`*.env`、金鑰）一律不納管、不 commit
+- **`chezmoi apply` 會覆蓋家目錄的改動** —— 套用前一定要先 `chezmoi diff`
+- 裝完 chezmoi 要**重開 PowerShell／Agent** 才吃得到 PATH
+- Codex 的使用者技能在 `~/.agents/skills/`，**不是** `~/.codex/skills/`
+- 檔案編碼規則相反：`SKILL.md` **不可含 BOM**（否則 frontmatter 解析失敗、技能觸發不了）；`.ps1` **必須含 BOM**（否則 PowerShell 5.1 當成 ANSI 讀，中文字串爛掉）
+- 本資料夾在雲端硬碟裡，動工前確認 Google 雲端硬碟桌面版的同步圖示已打勾
 - **`project-init`／`startup`／`shutdown` 三個技能由 `cross-device-agent-skills` 的 `Copy-Item` 負責，本專案不碰它們的內容**，只在 chezmoi 層面連同整個技能目錄一起納管。跑完對方的 `Copy-Item` 後 `chezmoi status` 第一欄會亮這三個，那是正常的，正解是 `chezmoi add --recursive` 收進來源（見 [README.md](README.md)〈兩套同步機制的分工邊界〉）
