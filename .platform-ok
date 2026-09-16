@@ -1,0 +1,12 @@
+# 刻意保留平台專屬寫法的檔案，由 cross-device-agent-skills/tools/check-platform.py 讀取。
+# 加進來之前先確認：這個檔案的平台專屬寫法是「設計如此」，不是「還沒改」。
+#
+# 只有「整個檔案都是平台專屬」才列在這裡。若檔案本身跨平台、只有幾行是 Windows 專屬
+# （例如包在 if ($IsWindows) 裡），請改用行內 `platform-ok:` 標記，不要整檔豁免。
+
+# 檔頭 .SYNOPSIS 就寫明是「在新的 Windows 機器上設定 chezmoi」，裡面走 winget 與
+# WinGet Packages 目錄找 chezmoi.exe，macOS 沒有對應動作。
+#
+# BOM 也是刻意的：這支的使用情境就是「新機器」，那時 Windows 預設只有 PowerShell 5.1
+# （pwsh 7 還沒裝），而 5.1 會把無 BOM 的 UTF-8 當 ANSI 讀、中文全爛。
+bootstrap-new-machine.ps1

@@ -49,14 +49,14 @@ chezmoi 的整個模型就是**兩個地方 + 兩個方向**。搞懂這張圖�
 那個 git repo。裡面是 `dot_claude/skills/...` 這種怪名字的檔案。這是真相的儲存處，
 是會被 push 到 GitHub、三台共享的東西。
 
-**target（目標）= 家目錄 `C:\Users\chang`**
+**target（目標）= 家目錄 `~`**
 四個 agent 實際讀取的地方。agent 不知道 chezmoi 存在，它只讀這裡。
 
 ```
                        chezmoi add --recursive
                             （回收，←）
    source                                              target
-~/.local/share/chezmoi                            C:\Users\chang
+~/.local/share/chezmoi                            ~（家目錄）
    dot_claude/skills/            ──────────►        .claude/skills/
    dot_codex/skills/                                .codex/skills/
    dot_config/opencode/skills/     chezmoi apply    .config/opencode/skills/

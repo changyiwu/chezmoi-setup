@@ -13,7 +13,7 @@ description: chezmoi 同步狀況檢查（家目錄 ↔ 來源 repo ↔ GitHub �
 
 ```
    remote                    source                      target
-GitHub repo    ←─push─    ~/.local/share/chezmoi   ←─add──   C:\Users\chang
+GitHub repo    ←─push─    ~/.local/share/chezmoi   ←─add──   ~（家目錄）
 dotfiles-      ──pull─→    （git working tree）     ──apply─→  .claude/skills/
 agent-skills                                                  .agents/skills/
                                                               .config/opencode/skills/
